@@ -12,7 +12,7 @@
   *{box-sizing:border-box}
   body{margin:0;background:linear-gradient(180deg,var(--bg),var(--bg2));color:var(--text);font:16px system-ui}
   header{position:sticky;top:0;z-index:10;background:rgba(17,24,39,.85);backdrop-filter:blur(6px);border-bottom:1px solid #ffffff18}
-  .wrap{max-width:1150px;margin:auto;padding:14px 18px}
+  .wrap{max-width:1180px;margin:auto;padding:14px 18px}
   h1{margin:0;font-size:20px}
   .controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:10px}
   .btn{
@@ -24,11 +24,15 @@
   .btn:active{transform:translateY(1px)}
   .btn[disabled]{opacity:.6;cursor:not-allowed;box-shadow:none}
   .pill{padding:6px 12px;border-radius:999px;border:1px solid #ffffff22;color:#cbd5e1;font-size:13px}
-  table{width:100%;border-collapse:collapse;margin:16px 0;background:#101826;border:1px solid #ffffff18;border-radius:12px;overflow:hidden;table-layout:fixed}
-  th,td{border-bottom:1px solid #ffffff12;padding:10px 12px;text-align:left;font-family:ui-monospace,Consolas,Menlo,monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  th{color:#cbd5e1;background:#0b1222;position:sticky;top:0}
-  th:nth-child(1), td:nth-child(1){min-width:260px} /* datetime по-широка */
-  td{min-width:120px} /* по-големи колонки */
+  table{width:100%;border-collapse:separate;border-spacing:0;margin:16px 0;background:#101826;border:1px solid #ffffff18;border-radius:12px;overflow:hidden}
+  th,td{border-bottom:1px solid #ffffff12;padding:10px 12px;text-align:center;
+        font-family:ui-monospace,Consolas,Menlo,monospace;white-space:nowrap}
+  thead th{color:#cbd5e1;background:#0b1222;position:sticky;top:0}
+  /* по-широка визуализация на datetime в ред 2: не се реже, няма "..." */
+  tbody tr.datetime-row td{
+    white-space:normal; word-break:keep-all; overflow:visible; text-overflow:clip;
+    font-weight:600; color:#cfe3ff;
+  }
   a{color:#8ab4ff;text-decoration:none}
   a:hover{text-decoration:underline}
   .log{background:#0b1222;border:1px solid #ffffff18;border-radius:12px;padding:10px;font-family:ui-monospace,Consolas,Menlo,monospace;max-height:140px;overflow:auto}
@@ -44,8 +48,6 @@
       <button id="btnConnect"   class="btn">Свържи</button>
       <button id="btnDisconnect" class="btn" disabled>Изключи</button>
       <button id="btnDownload"  class="btn" disabled>Свали CSV (сесия)</button>
-      <button id="btnAuto"      class="btn" disabled>Авто лог в CSV</button>
-      <button id="btnStopAuto"  class="btn" disabled>Стоп</button>
       <button id="btnClear"     class="btn" disabled>Изчисти таблицата</button>
       <span class="pill">Редове: <span id="rows">0</span></span>
       <span class="pill"><a href="./dashboard.html">Назад към Табло</a></span>
@@ -55,8 +57,16 @@
 
 <main class="wrap">
   <table>
-    <thead><tr id="thead"></tr></thead>
-    <tbody id="tbody"></tbody>
+    <thead>
+      <tr id="thead"><th>T1</th><th>T2</th><th>T3</th><th>T4</th><th>T5</th><th>T6</th></tr>
+    </thead>
+    <tbody id="tbody">
+      <!-- ред 1 (под заглавията): datetime под всяка колонка -->
+      <tr id="dtRow" class="datetime-row">
+        <td colspan="6" style="text-align:center">—</td>
+      </tr>
+      <!-- оттук надолу: само градуси на всеки 5 сек -->
+    </tbody>
   </table>
   <h3 style="margin:8px 0">Системен лог</h3>
   <pre id="log" class="log"></pre>
@@ -71,111 +81,68 @@ const PASS  = "Thermo123";
 const TOPIC = "esp32/thermo/values";
 /********************/
 
-const cols = ["datetime","T1","T2","T3","T4","T5","T6"]; // Хедър с реално време
-let tableRows = [cols.slice()]; // първият ред = header
+const cols = ["T1","T2","T3","T4","T5","T6"]; // колоните са термодвойките
+let rowsOnlyTemps = []; // масив само с градусите по редове (без header/datetime ред)
 
-// UI
 const el = {
   status: document.getElementById('status'),
   btnConnect: document.getElementById('btnConnect'),
   btnDisconnect: document.getElementById('btnDisconnect'),
   btnDownload: document.getElementById('btnDownload'),
-  btnAuto: document.getElementById('btnAuto'),
-  btnStopAuto: document.getElementById('btnStopAuto'),
   btnClear: document.getElementById('btnClear'),
   rows: document.getElementById('rows'),
   thead: document.getElementById('thead'),
   tbody: document.getElementById('tbody'),
+  dtRow: document.getElementById('dtRow'),
   log: document.getElementById('log'),
 };
 const log = s => el.log.textContent = `[${new Date().toLocaleTimeString()}] ${s}\n` + el.log.textContent;
 const setStatus = s => el.status.textContent = s;
 
-// Заглавия
-(function(){
-  for (const h of cols){ const th = document.createElement('th'); th.textContent = h; el.thead.appendChild(th); }
-})();
-
-function addRowToTable(arr){
-  const tr = document.createElement('tr');
-  for (const v of arr){ const td = document.createElement('td'); td.textContent = v; tr.appendChild(td); }
-  el.tbody.appendChild(tr);
-  el.rows.textContent = String(tableRows.length - 1);
+// показва/обновява datetime реда (под заглавията), на ЕДИН ред, четим
+function setDatetimeRow(dtText){
+  el.dtRow.innerHTML = `<td colspan="6" style="text-align:center">${dtText}</td>`;
 }
 
-function downloadCSV(){
-  const blob = new Blob(tableRows.map(r=>r.join(',')+'\n'), {type:'text/csv'});
+// добавя ред само с градусите
+function appendTempsRow(arrTemps){
+  const tr = document.createElement('tr');
+  tr.innerHTML = arrTemps.map(v => `<td>${(v===''||v==null)?'':String(v)}</td>`).join('');
+  el.tbody.appendChild(tr);
+  rowsOnlyTemps.push(arrTemps);
+  el.rows.textContent = String(rowsOnlyTemps.length);
+}
+
+el.btnDownload.onclick = ()=>{
+  // CSV в новата колонна форма:
+  // ред1: T1..T6
+  // ред2: datetime под всяка колонка (един и същ текст)
+  // ред3..: само градусите
+  const header = cols.join(',') + '\n';
+  const dt = (el.dtRow.textContent||'').trim();
+  const dtRow = cols.map(()=>dt).join(',') + '\n';
+  const body = rowsOnlyTemps.map(r=>r.join(',')).join('\n');
+  const csv = header + dtRow + (body? body+'\n' : '');
+  const blob = new Blob([csv], {type:'text/csv'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = `thermo_log_${new Date().toISOString().replace(/:/g,'-')}.csv`;
   a.click(); setTimeout(()=>URL.revokeObjectURL(a.href), 500);
-}
-el.btnDownload.onclick = downloadCSV;
+};
 
 el.btnClear.onclick = ()=>{
-  tableRows = [cols.slice()];
-  el.tbody.innerHTML = '';
+  // изтриваме само температурните редове (оставяме заглавията и datetime реда)
+  rowsOnlyTemps = [];
+  // премахни всички редове след dtRow
+  while (el.dtRow.nextSibling) el.dtRow.parentNode.removeChild(el.dtRow.nextSibling);
+  setDatetimeRow('—');
   el.rows.textContent = '0';
   log('Таблицата е изчистена.');
 };
 
-// ---------- Буфериран авто-запис ----------
-let autoHandle=null, autoWritable=null, autoOn=false, writeOffset=0, writeQueue=Promise.resolve();
-const FLUSH_EVERY_MS = 5000; // писане на всеки 5 сек
-let pendingLines = [];
-let flushTimer = null;
-
-async function startAuto(){
-  if (!('showSaveFilePicker' in window)){ log('Браузърът няма File System Access API (Chrome/Edge).'); return; }
-  try{
-    autoHandle = await window.showSaveFilePicker({
-      suggestedName: `thermo_log_${new Date().toISOString().replace(/:/g,'-')}.csv`,
-      types: [{description:'CSV', accept:{'text/csv':['.csv']}}]
-    });
-    const perm = await autoHandle.requestPermission({mode:'readwrite'});
-    if (perm !== 'granted'){ autoHandle=null; return; }
-    const f = await autoHandle.getFile();
-    writeOffset = f.size;
-    autoWritable = await autoHandle.createWritable({keepExistingData:true});
-    if (writeOffset === 0){
-      const header = cols.join(',')+'\n';
-      await autoWritable.write(header);
-      writeOffset = header.length;
-    }
-    autoOn = true; el.btnAuto.disabled=true; el.btnStopAuto.disabled=false;
-    flushTimer = setInterval(flushBuffer, FLUSH_EVERY_MS);
-    log('Авто лог: включен (буфериран '+(FLUSH_EVERY_MS/1000)+'s).');
-  }catch(e){ log('Авто лог: грешка/отказ: '+(e?.message||e)); }
-}
-async function stopAuto(){
-  try{ await flushBuffer(); }catch{}
-  try{ if (flushTimer){ clearInterval(flushTimer); flushTimer=null; } }catch{}
-  try{ await writeQueue; }catch{}
-  try{ if (autoWritable){ await autoWritable.close(); } }catch{}
-  autoOn=false; autoHandle=null; autoWritable=null; writeOffset=0; writeQueue=Promise.resolve(); pendingLines=[];
-  el.btnAuto.disabled=false; el.btnStopAuto.disabled=true;
-  log('Авто лог: спрян');
-}
-function appendLineBuffered(line){
-  if (!autoOn || !autoWritable) return;
-  pendingLines.push(line);
-}
-async function flushBuffer(){
-  if (!autoOn || !autoWritable) return;
-  if (!pendingLines.length) return;
-  const chunk = pendingLines.join('');
-  pendingLines = [];
-  writeQueue = writeQueue.then(async ()=>{
-    await autoWritable.seek(writeOffset);
-    await autoWritable.write(chunk);
-    writeOffset += chunk.length;
-  }).catch(e=> log('Запис грешка: '+(e?.message||e)));
-}
-window.addEventListener('beforeunload', ()=>{ if (autoOn){ try{ clearInterval(flushTimer); }catch{} flushBuffer(); } });
-
-el.btnAuto.onclick = startAuto;
-el.btnStopAuto.onclick = stopAuto;
-// ------------------------------------------
+// ---- Отчитане на всеки 5 секунди ----
+const SAMPLE_MS = 5000;
+let lastSampleMs = 0;
 
 // MQTT
 let client=null;
@@ -185,11 +152,21 @@ const options = { username: USER, password: PASS, reconnectPeriod: 2000, clean:t
 function onMsg(topic, payload){
   try{
     const d = JSON.parse(new TextDecoder().decode(payload));
-    const dt = d.datetime || new Date().toISOString(); // реално време от ESP
-    const row = [ dt, ...["T1","T2","T3","T4","T5","T6"].map(n => (d[n]==null? '' : Number(d[n]).toFixed(2))) ];
-    tableRows.push(row);
-    addRowToTable(row);
-    if (autoOn && autoWritable) appendLineBuffered(row.join(',')+'\n');
+    const nowMs = Date.now();
+    if (nowMs - lastSampleMs < SAMPLE_MS) return; // чакаме 5 секунди
+    lastSampleMs = nowMs;
+
+    // datetime от ESP (истинско време)
+    const dt = d.datetime || new Date().toISOString();
+    setDatetimeRow(dt);
+
+    // градусите по колони
+    const temps = cols.map(n => {
+      const v = d[n];
+      return (v==null || Number.isNaN(Number(v))) ? '' : Number(v).toFixed(2);
+    });
+
+    appendTempsRow(temps);
   }catch(e){ log('Parse error: '+(e?.message||e)); }
 }
 
@@ -198,7 +175,7 @@ function connect(){
   setStatus('Свързване…');
   client = mqtt.connect(url, options);
   client.on('connect', ()=>{ setStatus('Свързан'); client.subscribe(TOPIC); log('Subscribed: '+TOPIC);
-    el.btnDisconnect.disabled=false; el.btnConnect.disabled=true; el.btnDownload.disabled=false; el.btnAuto.disabled=false; el.btnClear.disabled=false; });
+    el.btnDisconnect.disabled=false; el.btnConnect.disabled=true; el.btnDownload.disabled=false; el.btnClear.disabled=false; });
   client.on('reconnect', ()=> setStatus('Повторен опит…'));
   client.on('error', (e)=> { setStatus('Грешка'); log('ERR '+(e?.message||e)); });
   client.on('close', ()=>{ setStatus('Изключено'); el.btnDisconnect.disabled=true; el.btnConnect.disabled=false; });
