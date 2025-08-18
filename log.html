@@ -152,4 +152,62 @@ async function stopAuto(){
   el.btnAuto.disabled=false; el.btnStopAuto.disabled=true;
   log('Авто лог: спрян');
 }
-function appen
+function appendLineBuffered(line){
+  if (!autoOn || !autoWritable) return;
+  pendingLines.push(line);
+}
+async function flushBuffer(){
+  if (!autoOn || !autoWritable) return;
+  if (!pendingLines.length) return;
+  const chunk = pendingLines.join('');
+  pendingLines = [];
+  writeQueue = writeQueue.then(async ()=>{
+    await autoWritable.seek(writeOffset);
+    await autoWritable.write(chunk);
+    writeOffset += chunk.length;
+  }).catch(e=> log('Запис грешка: '+(e?.message||e)));
+}
+window.addEventListener('beforeunload', ()=>{ if (autoOn){ try{ clearInterval(flushTimer); }catch{} flushBuffer(); } });
+
+el.btnAuto.onclick = startAuto;
+el.btnStopAuto.onclick = stopAuto;
+// ------------------------------------------
+
+// MQTT
+let client=null;
+const url = `wss://${HOST}:${PORT}/mqtt`;
+const options = { username: USER, password: PASS, reconnectPeriod: 2000, clean:true, connectTimeout: 10000 };
+
+function onMsg(topic, payload){
+  try{
+    const d = JSON.parse(new TextDecoder().decode(payload));
+    const dt = d.datetime || new Date().toISOString(); // реалното време от ESP
+    const row = [ dt, ...["T1","T2","T3","T4","T5","T6"].map(n => (d[n]==null? '' : Number(d[n]).toFixed(2))) ];
+    tableRows.push(row);
+    addRowToTable(row);
+    if (autoOn && autoWritable) appendLineBuffered(row.join(',')+'\n');
+  }catch(e){ log('Parse error: '+(e?.message||e)); }
+}
+
+function connect(){
+  try{ if (client) client.end(true); }catch{}
+  setStatus('Свързване…');
+  client = mqtt.connect(url, options);
+  client.on('connect', ()=>{ setStatus('Свързан'); client.subscribe(TOPIC); log('Subscribed: '+TOPIC);
+    el.btnDisconnect.disabled=false; el.btnConnect.disabled=true; el.btnDownload.disabled=false; el.btnAuto.disabled=false; el.btnClear.disabled=false; });
+  client.on('reconnect', ()=> setStatus('Повторен опит…'));
+  client.on('error', (e)=> { setStatus('Грешка'); log('ERR '+(e?.message||e)); });
+  client.on('close', ()=>{ setStatus('Изключено'); el.btnDisconnect.disabled=true; el.btnConnect.disabled=false; });
+  client.on('message', onMsg);
+}
+function disconnect(){ try{ if (client) client.end(true); }catch{} }
+
+el.btnConnect.onclick = connect;
+el.btnDisconnect.onclick = disconnect;
+
+window.addEventListener('error', (e)=> log('JS Error: '+e.message));
+window.addEventListener('unhandledrejection', (e)=> log('Promise: '+(e.reason?.message||e.reason)));
+window.addEventListener('load', connect);
+</script>
+</body>
+</html>
