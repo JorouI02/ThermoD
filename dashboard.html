@@ -94,7 +94,7 @@ function fmtISO(ts){
 function onMsg(topic, payload){
   try{
     const d = JSON.parse(new TextDecoder().decode(payload));
-    const iso = fmtISO(d.ts);
+   const dt = d.datetime || new Date().toISOString();
     for (const name of fields){
       const v = d[name];
       const vEl = document.getElementById('v-'+name);
