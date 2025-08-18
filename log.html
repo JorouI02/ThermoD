@@ -135,10 +135,6 @@ el.btnClear.onclick = ()=>{
   log('Таблицата е изчистена.');
 };
 
-// ---- Отчитане на всеки 5 секунди ----
-const SAMPLE_MS = 5000;
-let lastSampleMs = 0;
-
 // MQTT
 let client=null;
 const url = `wss://${HOST}:${PORT}/mqtt`;
@@ -147,10 +143,6 @@ const options = { username: USER, password: PASS, reconnectPeriod: 2000, clean:t
 function onMsg(topic, payload){
   try{
     const d = JSON.parse(new TextDecoder().decode(payload));
-    const nowMs = Date.now();
-    if (nowMs - lastSampleMs < SAMPLE_MS) return; // чакаме 5 секунди
-    lastSampleMs = nowMs;
-
     // datetime от ESP (истинско време)
     const dt = d.datetime || new Date().toISOString();
 
