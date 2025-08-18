@@ -1,180 +1,295 @@
 <!DOCTYPE html>
 <html lang="bg">
+
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Thermo Log (MQTT • 6 канала)</title>
-<style>
-  :root{
-    --bg:#0f172a;--bg2:#0b1222;--panel:#111827;--text:#e5e7eb;--muted:#94a3b8;
-    --btn-br:#2b3a5a;--btn-br2:#74a7ff;
-  }
-  *{box-sizing:border-box}
-  body{margin:0;background:linear-gradient(180deg,var(--bg),var(--bg2));color:var(--text);font:16px system-ui}
-  header{position:sticky;top:0;z-index:10;background:rgba(17,24,39,.85);backdrop-filter:blur(6px);border-bottom:1px solid #ffffff18}
-  .wrap{max-width:1180px;margin:auto;padding:14px 18px}
-  h1{margin:0;font-size:20px}
-  .controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:10px}
-  .btn{
-    appearance:none;background:linear-gradient(180deg,#14213b,#0b1222);color:var(--text);
-    border:1px solid var(--btn-br);padding:10px 14px;border-radius:12px;cursor:pointer;
-    transition:all .15s ease;box-shadow:0 1px 0 #0008
-  }
-  .btn:hover{border-color:var(--btn-br2);box-shadow:0 0 0 1px var(--btn-br2) inset}
-  .btn:active{transform:translateY(1px)}
-  .btn[disabled]{opacity:.6;cursor:not-allowed;box-shadow:none}
-  .pill{padding:6px 12px;border-radius:999px;border:1px solid #ffffff22;color:#cbd5e1;font-size:13px}
-  table{width:100%;border-collapse:separate;border-spacing:0;margin:16px 0;background:#101826;border:1px solid #ffffff18;border-radius:12px;overflow:hidden}
-  th,td{border-bottom:1px solid #ffffff12;padding:10px 12px;text-align:center;
-        font-family:ui-monospace,Consolas,Menlo,monospace;white-space:nowrap}
-  thead th{color:#cbd5e1;background:#0b1222;position:sticky;top:0}
-  /* по-широка визуализация на datetime в ред 2: не се реже, няма "..." */
-  tbody tr.datetime-row td{
-    white-space:normal; word-break:keep-all; overflow:visible; text-overflow:clip;
-    font-weight:600; color:#cfe3ff;
-  }
-  a{color:#8ab4ff;text-decoration:none}
-  a:hover{text-decoration:underline}
-  .log{background:#0b1222;border:1px solid #ffffff18;border-radius:12px;padding:10px;font-family:ui-monospace,Consolas,Menlo,monospace;max-height:140px;overflow:auto}
-</style>
-<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Thermo Log (MQTT • 6 канала)</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --bg2: #0b1222;
+      --panel: #111827;
+      --text: #e5e7eb;
+      --muted: #94a3b8;
+      --btn-br: #2b3a5a;
+      --btn-br2: #74a7ff;
+    }
+
+    * {
+      box-sizing: border-box
+    }
+
+    body {
+      margin: 0;
+      background: linear-gradient(180deg, var(--bg), var(--bg2));
+      color: var(--text);
+      font: 16px system-ui
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: rgba(17, 24, 39, .85);
+      backdrop-filter: blur(6px);
+      border-bottom: 1px solid #ffffff18
+    }
+
+    .wrap {
+      max-width: 1180px;
+      margin: auto;
+      padding: 14px 18px
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 20px
+    }
+
+    .controls {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-top: 10px
+    }
+
+    .btn {
+      appearance: none;
+      background: linear-gradient(180deg, #14213b, #0b1222);
+      color: var(--text);
+      border: 1px solid var(--btn-br);
+      padding: 10px 14px;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all .15s ease;
+      box-shadow: 0 1px 0 #0008
+    }
+
+    .btn:hover {
+      border-color: var(--btn-br2);
+      box-shadow: 0 0 0 1px var(--btn-br2) inset
+    }
+
+    .btn:active {
+      transform: translateY(1px)
+    }
+
+    .btn[disabled] {
+      opacity: .6;
+      cursor: not-allowed;
+      box-shadow: none
+    }
+
+    .pill {
+      padding: 6px 12px;
+      border-radius: 999px;
+      border: 1px solid #ffffff22;
+      color: #cbd5e1;
+      font-size: 13px
+    }
+
+    table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      margin: 16px 0;
+      background: #101826;
+      border: 1px solid #ffffff18;
+      border-radius: 12px;
+      overflow: hidden
+    }
+
+    th,
+    td {
+      border-bottom: 1px solid #ffffff12;
+      padding: 10px 12px;
+      text-align: center;
+      font-family: ui-monospace, Consolas, Menlo, monospace;
+      white-space: nowrap
+    }
+
+    thead th {
+      color: #cbd5e1;
+      background: #0b1222;
+      position: sticky;
+      top: 0
+    }
+
+    a {
+      color: #8ab4ff;
+      text-decoration: none
+    }
+
+    a:hover {
+      text-decoration: underline
+    }
+
+    .log {
+      background: #0b1222;
+      border: 1px solid #ffffff18;
+      border-radius: 12px;
+      padding: 10px;
+      font-family: ui-monospace, Consolas, Menlo, monospace;
+      max-height: 140px;
+      overflow: auto
+    }
+  </style>
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <!-- SheetJS for XLSX export -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
+
 <body>
-<header>
-  <div class="wrap">
-    <h1>Thermo Log • HiveMQ Cloud (6 канала)</h1>
-    <div class="controls">
-      <span class="pill">Статус: <span id="status">Изчакване…</span></span>
-      <button id="btnConnect"   class="btn">Свържи</button>
-      <button id="btnDisconnect" class="btn" disabled>Изключи</button>
-      <button id="btnDownload"  class="btn" disabled>Свали CSV (сесия)</button>
-      <button id="btnClear"     class="btn" disabled>Изчисти таблицата</button>
-      <span class="pill">Редове: <span id="rows">0</span></span>
-      <span class="pill"><a href="./dashboard.html">Назад към Табло</a></span>
+  <header>
+    <div class="wrap">
+      <h1>Thermo Log • HiveMQ Cloud (6 канала)</h1>
+      <div class="controls">
+        <span class="pill">Статус: <span id="status">Изчакване…</span></span>
+        <button id="btnConnect" class="btn">Свържи</button>
+        <button id="btnDisconnect" class="btn" disabled>Изключи</button>
+        <button id="btnDownload" class="btn" disabled>Свали Excel (.xlsx)</button>
+        <button id="btnClear" class="btn" disabled>Изчисти таблицата</button>
+        <span class="pill">Редове: <span id="rows">0</span></span>
+        <span class="pill"><a href="./dashboard.html">Назад към Табло</a></span>
+      </div>
     </div>
-  </div>
-</header>
+  </header>
 
-<main class="wrap">
-  <table>
-    <thead>
-      <tr id="thead"><th>DateTime</th><th>T1</th><th>T2</th><th>T3</th><th>T4</th><th>T5</th><th>T6</th></tr>
-    </thead>
-    <tbody id="tbody">
-      <!-- оттук надолу: само градуси на всеки 5 сек -->
-    </tbody>
-  </table>
-  <h3 style="margin:8px 0">Системен лог</h3>
-  <pre id="log" class="log"></pre>
-</main>
+  <main class="wrap">
+    <table>
+      <thead>
+        <tr id="thead">
+          <th>DateTime</th>
+          <th>T1</th>
+          <th>T2</th>
+          <th>T3</th>
+          <th>T4</th>
+          <th>T5</th>
+          <th>T6</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+    <h3 style="margin:8px 0">Системен лог</h3>
+    <pre id="log" class="log"></pre>
+  </main>
 
-<script>
-/*** ПОПЪЛНИ ТУК ***/
-const HOST  = "8dfb5d8ea05e42479e6203aca4957355.s1.eu.hivemq.cloud";
-const PORT  = 8884;
-const USER  = "ThermoESP";
-const PASS  = "Thermo123";
-const TOPIC = "esp32/thermo/values";
-/********************/
+  <script>
+    /*** ПОПЪЛНИ ТУК ***/
+    const HOST = "8dfb5d8ea05e42479e6203aca4957355.s1.eu.hivemq.cloud";
+    const PORT = 8884;
+    const USER = "ThermoESP";
+    const PASS = "Thermo123";
+    const TOPIC = "esp32/thermo/values";
+    /********************/
 
-const cols = ["T1","T2","T3","T4","T5","T6"]; // колоните са термодвойките
-let rowsOnlyTemps = []; // масив само с градусите по редове (без header/datetime ред)
+    // Columns & in-memory rows (each row: [DateTime, T1..T6])
+    const cols = ["DateTime", "T1", "T2", "T3", "T4", "T5", "T6"];
+    let dataRows = [];
 
-const el = {
-  status: document.getElementById('status'),
-  btnConnect: document.getElementById('btnConnect'),
-  btnDisconnect: document.getElementById('btnDisconnect'),
-  btnDownload: document.getElementById('btnDownload'),
-  btnClear: document.getElementById('btnClear'),
-  rows: document.getElementById('rows'),
-  thead: document.getElementById('thead'),
-  tbody: document.getElementById('tbody'),
-  dtRow: document.getElementById('dtRow'),
-  log: document.getElementById('log'),
-};
-const log = s => el.log.textContent = `[${new Date().toLocaleTimeString()}] ${s}\n` + el.log.textContent;
-const setStatus = s => el.status.textContent = s;
+    const el = {
+      status: document.getElementById('status'),
+      btnConnect: document.getElementById('btnConnect'),
+      btnDisconnect: document.getElementById('btnDisconnect'),
+      btnDownload: document.getElementById('btnDownload'),
+      btnClear: document.getElementById('btnClear'),
+      rows: document.getElementById('rows'),
+      thead: document.getElementById('thead'),
+      tbody: document.getElementById('tbody'),
+      log: document.getElementById('log'),
+    };
+    const log = s => el.log.textContent = `[${new Date().toLocaleTimeString()}] ${s}\n` + el.log.textContent;
+    const setStatus = s => el.status.textContent = s;
 
-// показва/обновява datetime реда (под заглавията), на ЕДИН ред, четим
-function setDatetimeRow(dtText){
-  el.dtRow.innerHTML = `<td colspan="6" style="text-align:center">${dtText}</td>`;
-}
+    // Add a new table row & save it
+    function appendRow(datetime, temps) {
+      const sanitizedTemps = temps.map(v => (v === '' || v == null) ? '' : String(v));
+      const row = [String(datetime), ...sanitizedTemps];
+      const tr = document.createElement('tr');
+      tr.innerHTML = row.map(v => `<td>${v}</td>`).join('');
+      el.tbody.appendChild(tr);
+      dataRows.push(row);
+      el.rows.textContent = String(dataRows.length);
+    }
 
-// добавя ред само с градусите
-function appendTempsRow(datetime, arrTemps){
-  const tr = document.createElement('tr');
-  tr.innerHTML = `<td>${datetime}</td>${arrTemps.map(v => `<td>${(v===''||v==null)?'':String(v)}</td>`).join('')}`;
-  el.tbody.appendChild(tr);
-  rowsOnlyTemps.push(arrTemps);
-  el.rows.textContent = String(rowsOnlyTemps.length);
-}
+    // --- XLSX download (no locale issues) ---
+    el.btnDownload.onclick = () => {
+      const aoa = [cols, ...dataRows];                 // array-of-arrays
+      const ws = XLSX.utils.aoa_to_sheet(aoa);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Thermo");
 
-el.btnDownload.onclick = ()=>{
-  // CSV в новата колонна форма:
-  // ред1: T1..T6
-  // ред2: datetime под всяка колонка (един и същ текст)
-  // ред3..: само градусите
-  const header = cols.join(',') + '\n';
-  const dt = (el.dtRow.textContent||'').trim();
-  const dtRow = cols.map(()=>dt).join(',') + '\n';
-  const body = rowsOnlyTemps.map(r=>r.join(',')).join('\n');
-  const csv = header + dtRow + (body? body+'\n' : '');
-  const blob = new Blob([csv], {type:'text/csv'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `thermo_log_${new Date().toISOString().replace(/:/g,'-')}.csv`;
-  a.click(); setTimeout(()=>URL.revokeObjectURL(a.href), 500);
-};
+      // Optional: set column widths for readability
+      const colWidths = [{ wch: 22 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 10 }];
+      ws['!cols'] = colWidths;
 
-el.btnClear.onclick = ()=>{
-  // изтриваме само температурните редове (оставяме заглавията и datetime реда)
-  rowsOnlyTemps = [];
-  // премахни всички редове след dtRow
-  while (el.dtRow.nextSibling) el.dtRow.parentNode.removeChild(el.dtRow.nextSibling);
-  el.rows.textContent = '0';
-  log('Таблицата е изчистена.');
-};
+      const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 
-// MQTT
-let client=null;
-const url = `wss://${HOST}:${PORT}/mqtt`;
-const options = { username: USER, password: PASS, reconnectPeriod: 2000, clean:true, connectTimeout: 10000 };
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `thermo_log_${new Date().toISOString().replace(/:/g, '-')}.xlsx`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 500);
+    };
 
-function onMsg(topic, payload){
-  try{
-    const d = JSON.parse(new TextDecoder().decode(payload));
-    // datetime от ESP (истинско време)
-    const dt = d.datetime || new Date().toISOString();
+    el.btnClear.onclick = () => {
+      dataRows = [];
+      el.tbody.innerHTML = '';
+      el.rows.textContent = '0';
+      log('Таблицата е изчистена.');
+    };
 
-    // градусите по колони
-    const temps = cols.map(n => {
-      const v = d[n];
-      return (v==null || Number.isNaN(Number(v))) ? '' : Number(v).toFixed(2);
-    });
+    // Sampling (0 = log every message)
+    const SAMPLE_MS = 0;
+    let lastSampleMs = 0;
 
-    appendTempsRow(dt, temps);
-  }catch(e){ log('Parse error: '+(e?.message||e)); }
-}
+    // MQTT
+    let client = null;
+    const url = `wss://${HOST}:${PORT}/mqtt`;
+    const options = { username: USER, password: PASS, reconnectPeriod: 2000, clean: true, connectTimeout: 10000 };
 
-function connect(){
-  try{ if (client) client.end(true); }catch{}
-  setStatus('Свързване…');
-  client = mqtt.connect(url, options);
-  client.on('connect', ()=>{ setStatus('Свързан'); client.subscribe(TOPIC); log('Subscribed: '+TOPIC);
-    el.btnDisconnect.disabled=false; el.btnConnect.disabled=true; el.btnDownload.disabled=false; el.btnClear.disabled=false; });
-  client.on('reconnect', ()=> setStatus('Повторен опит…'));
-  client.on('error', (e)=> { setStatus('Грешка'); log('ERR '+(e?.message||e)); });
-  client.on('close', ()=>{ setStatus('Изключено'); el.btnDisconnect.disabled=true; el.btnConnect.disabled=false; });
-  client.on('message', onMsg);
-}
-function disconnect(){ try{ if (client) client.end(true); }catch{} }
+    function onMsg(topic, payload) {
+      try {
+        const d = JSON.parse(new TextDecoder().decode(payload));
+        const nowMs = Date.now();
+        if (nowMs - lastSampleMs < SAMPLE_MS) return;
+        lastSampleMs = nowMs;
 
-el.btnConnect.onclick = connect;
-el.btnDisconnect.onclick = disconnect;
+        const dt = d.datetime || new Date().toISOString();
+        const temps = ["T1", "T2", "T3", "T4", "T5", "T6"].map(n => {
+          const v = d[n];
+          return (v == null || Number.isNaN(Number(v))) ? '' : Number(v).toFixed(2);
+        });
 
-window.addEventListener('error', (e)=> log('JS Error: '+e.message));
-window.addEventListener('unhandledrejection', (e)=> log('Promise: '+(e.reason?.message||e.reason)));
-window.addEventListener('load', connect);
-</script>
+        appendRow(dt, temps);
+      } catch (e) { log('Parse error: ' + (e?.message || e)); }
+    }
+
+    function connect() {
+      try { if (client) client.end(true); } catch { }
+      setStatus('Свързване…');
+      client = mqtt.connect(url, options);
+      client.on('connect', () => {
+        setStatus('Свързан'); client.subscribe(TOPIC); log('Subscribed: ' + TOPIC);
+        el.btnDisconnect.disabled = false; el.btnConnect.disabled = true; el.btnDownload.disabled = false; el.btnClear.disabled = false;
+      });
+      client.on('reconnect', () => setStatus('Повторен опит…'));
+      client.on('error', (e) => { setStatus('Грешка'); log('ERR ' + (e?.message || e)); });
+      client.on('close', () => { setStatus('Изключено'); el.btnDisconnect.disabled = true; el.btnConnect.disabled = false; });
+      client.on('message', onMsg);
+    }
+    function disconnect() { try { if (client) client.end(true); } catch { } }
+
+    el.btnConnect.onclick = connect;
+    el.btnDisconnect.onclick = disconnect;
+
+    window.addEventListener('error', (e) => log('JS Error: ' + e.message));
+    window.addEventListener('unhandledrejection', (e) => log('Promise: ' + (e.reason?.message || e.reason)));
+    window.addEventListener('load', connect);
+  </script>
 </body>
+
 </html>
