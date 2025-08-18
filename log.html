@@ -58,13 +58,9 @@
 <main class="wrap">
   <table>
     <thead>
-      <tr id="thead"><th>T1</th><th>T2</th><th>T3</th><th>T4</th><th>T5</th><th>T6</th></tr>
+      <tr id="thead"><th>DateTime</th><th>T1</th><th>T2</th><th>T3</th><th>T4</th><th>T5</th><th>T6</th></tr>
     </thead>
     <tbody id="tbody">
-      <!-- ред 1 (под заглавията): datetime под всяка колонка -->
-      <tr id="dtRow" class="datetime-row">
-        <td colspan="6" style="text-align:center">—</td>
-      </tr>
       <!-- оттук надолу: само градуси на всеки 5 сек -->
     </tbody>
   </table>
@@ -105,9 +101,9 @@ function setDatetimeRow(dtText){
 }
 
 // добавя ред само с градусите
-function appendTempsRow(arrTemps){
+function appendTempsRow(datetime, arrTemps){
   const tr = document.createElement('tr');
-  tr.innerHTML = arrTemps.map(v => `<td>${(v===''||v==null)?'':String(v)}</td>`).join('');
+  tr.innerHTML = `<td>${datetime}</td>${arrTemps.map(v => `<td>${(v===''||v==null)?'':String(v)}</td>`).join('')}`;
   el.tbody.appendChild(tr);
   rowsOnlyTemps.push(arrTemps);
   el.rows.textContent = String(rowsOnlyTemps.length);
@@ -135,7 +131,6 @@ el.btnClear.onclick = ()=>{
   rowsOnlyTemps = [];
   // премахни всички редове след dtRow
   while (el.dtRow.nextSibling) el.dtRow.parentNode.removeChild(el.dtRow.nextSibling);
-  setDatetimeRow('—');
   el.rows.textContent = '0';
   log('Таблицата е изчистена.');
 };
@@ -158,7 +153,6 @@ function onMsg(topic, payload){
 
     // datetime от ESP (истинско време)
     const dt = d.datetime || new Date().toISOString();
-    setDatetimeRow(dt);
 
     // градусите по колони
     const temps = cols.map(n => {
@@ -166,7 +160,7 @@ function onMsg(topic, payload){
       return (v==null || Number.isNaN(Number(v))) ? '' : Number(v).toFixed(2);
     });
 
-    appendTempsRow(temps);
+    appendTempsRow(dt, temps);
   }catch(e){ log('Parse error: '+(e?.message||e)); }
 }
 
