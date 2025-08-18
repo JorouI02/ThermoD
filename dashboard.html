@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Thermo Dashboard (MQTT • 6 канала)</title>
+<style>
+  :root{--bg:#0f172a;--panel:#111827;--card:#1f2937;--text:#e5e7eb;--muted:#94a3b8}
+  *{box-sizing:border-box} body{margin:0;background:linear-gradient(180deg,var(--bg),#0b1222);color:var(--text);font:16px system-ui}
+  header{position:sticky;top:0;z-index:10;background:rgba(17,24,39,.85);backdrop-filter:blur(6px);border-bottom:1px solid #ffffff12}
+  .wrap{max-width:1100px;margin:auto;padding:12px 16px}
+  h1{margin:0;font-size:18px}
+  .controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px}
+  button{background:#0b1222;color:var(--text);border:1px solid #ffffff22;border-radius:12px;padding:10px 12px;cursor:pointer}
+  button[disabled]{opacity:.6;cursor:not-allowed}
+  .pill{padding:6px 10px;border-radius:999px;border:1px solid #ffffff22;color:#cbd5e1;font-size:13px}
+  .grid{display:grid;gap:12px;margin:14px 0;grid-template-columns:repeat(3,1fr)}
+  @media (max-width:900px){.grid{grid-template-columns:repeat(2,1fr)}}
+  @media (max-width:560px){.grid{grid-template-columns:1fr}}
+  .card{background:linear-gradient(180deg,var(--card),#152238);border:1px solid #ffffff12;border-radius:16px;padding:12px}
+  .card h3{margin:0 0 6px;font-size:15px;color:#cbd5e1}.val{font-size:28px;font-weight:700}.muted{color:var(--muted);font-size:12px}
+  .log{background:#0b1222;border:1px solid #ffffff12;border-radius:12px;padding:10px;font-family:ui-monospace,Consolas,Menlo,monospace;max-height:160px;overflow:auto}
+  a{color:#8ab4ff}
+</style>
+<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <h1>Thermo Dashboard • HiveMQ Cloud (6 канала)</h1>
+    <div class="controls">
+      <span class="pill">Статус: <span id="status">Изчакване…</span></span>
+      <button id="btnConnect">Свържи</button>
+      <button id="btnDisconnect" disabled>Изключи</button>
+      <span class="pill">Пакети: <span id="pkts">0</span></span>
+      <span class="pill"><a href="./log.html">Отиди на Лог</a></span>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <div id="cards" class="grid"></div>
+  <h3 style="margin:8px 0">Системен лог</h3>
+  <pre id="log" class="log"></pre>
+</main>
+
+<script>
+const HOST  = "8dfb5d8ea05e42479e6203aca4957355.s1.eu.hivemq.cloud";
+const PORT  = 8884;                      // WSS за браузър
+const USER  = "ThermoESP";
+const PASS  = "Thermo123";
+const TOPIC = "esp32/thermo/values";
+
+const fields = ["T1","T2","T3","T4","T5","T6"];
+let pkt = 0;
+
+const el = {
+  status: document.getElementById('status'),
+  btnConnect: document.getElementById('btnConnect'),
+  btnDisconnect: document.getElementById('btnDisconnect'),
+  pkts: document.getElementById('pkts'),
+  cards: document.getElementById('cards'),
+  log: document.getElementById('log'),
+};
+function log(s){ el.log.textContent = `[${new Date().toLocaleTimeString()}] ${s}\n` + el.log.textContent; }
+function setStatus(s){ el.status.textContent = s; }
+
+// създаваме картите веднъж
+(function(){
+  const frag = document.createDocumentFragment();
+  for (const name of fields){
+    const c = document.createElement('div');
+    c.className = 'card';
+    c.innerHTML = `<h3>${name}</h3><div class="val" id="v-${name}">—</div><div class="muted" id="t-${name}">—</div>`;
+    frag.appendChild(c);
+  }
+  el.cards.appendChild(frag);
+})();
+
+// MQTT
+let client = null;
+const url = `wss://${HOST}:${PORT}/mqtt`;
+const options = { username: USER, password: PASS, reconnectPeriod: 2000, clean:true, connectTimeout: 10000 };
+
+function fmtISO(ts){
+  if (typeof ts === 'string') return new Date(ts).toISOString();
+  if (typeof ts === 'number'){
+    const ms = ts >= 1e12 ? ts : (ts >= 1e6 ? ts : ts*1000); // милисек от boot → >=1e6
+    return new Date(ms).toISOString();
+  }
+  return new Date().toISOString();
+}
+
+function onMsg(topic, payload){
+  try{
+    const d = JSON.parse(new TextDecoder().decode(payload));
+    const iso = fmtISO(d.ts);
+    for (const name of fields){
+      const v = d[name];
+      const vEl = document.getElementById('v-'+name);
+      const tEl = document.getElementById('t-'+name);
+      if (vEl) vEl.textContent = (v==null||Number.isNaN(v)) ? '—' : `${Number(v).toFixed(2)} °C`;
+      if (tEl) tEl.textContent = iso;
+    }
+    el.pkts.textContent = String(++pkt);
+  }catch(e){ log('Parse error: '+(e?.message||e)); }
+}
+
+function connect(){
+  try{ if (client) client.end(true); }catch{}
+  setStatus('Свързване…');
+  client = mqtt.connect(url, options);
+  client.on('connect', ()=>{ setStatus('Свързан'); client.subscribe(TOPIC); log('Subscribed: '+TOPIC); el.btnDisconnect.disabled=false; el.btnConnect.disabled=true; });
+  client.on('reconnect', ()=> setStatus('Повторен опит…'));
+  client.on('error', (e)=> { setStatus('Грешка'); log('ERR '+(e?.message||e)); });
+  client.on('close', ()=>{ setStatus('Изключено'); el.btnDisconnect.disabled=true; el.btnConnect.disabled=false; });
+  client.on('message', onMsg);
+}
+function disconnect(){ try{ if (client) client.end(true); }catch{} }
+
+el.btnConnect.onclick = connect;
+el.btnDisconnect.onclick = disconnect;
+
+window.addEventListener('error', (e)=> log('JS Error: '+e.message));
+window.addEventListener('unhandledrejection', (e)=> log('Promise: '+(e.reason?.message||e.reason)));
+window.addEventListener('load', connect);
+</script>
+</body>
+</html>
