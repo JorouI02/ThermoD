@@ -56,7 +56,7 @@ const USER  = "ThermoESP";
 const PASS  = "Thermo123";
 const TOPIC = "esp32/thermo/values";
 
-const fields = ["iso_ts","T1","T2","T3","T4","T5","T6"]; // заглавия на колони
+const fields = ["datetime","T1","T2","T3","T4","T5","T6"]; // заглавия на колони
 let tableRows = [fields.slice()]; // първият е хедър
 let pkt = 0;
 
@@ -175,8 +175,9 @@ const options = { username: USER, password: PASS, reconnectPeriod: 2000, clean:t
 function onMsg(topic, payload){
   try{
     const d = JSON.parse(new TextDecoder().decode(payload));
-    const iso = fmtISO(d.ts);
-    const row = [ iso,
+    const dt = d.datetime || new Date().toISOString();
+
+    const row = [ dt,
       ...["T1","T2","T3","T4","T5","T6"].map(n => (d[n]==null? '' : Number(d[n]).toFixed(2)))
     ];
     tableRows.push(row);
