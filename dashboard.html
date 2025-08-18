@@ -12,18 +12,28 @@
   *{box-sizing:border-box}
   body{margin:0;background:linear-gradient(180deg,var(--bg),var(--bg2));color:var(--text);font:16px system-ui,-apple-system,Segoe UI,Roboto,Ubuntu}
   header{position:sticky;top:0;z-index:10;background:rgba(17,24,39,.85);backdrop-filter:blur(6px);border-bottom:1px solid #ffffff18}
-  .wrap{max-width:1150px;margin:auto;padding:14px 18px}
+  .wrap{max-width:1180px;margin:auto;padding:14px 18px}
   h1{margin:0;font-size:20px}
   .controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:10px}
   .pill{padding:6px 12px;border-radius:999px;border:1px solid #ffffff22;color:#cbd5e1;font-size:13px}
-  .btn, select{
+  .btn{
     appearance:none;background:linear-gradient(180deg,#14213b,#0b1222);color:var(--text);
     border:1px solid var(--btn-br);padding:10px 14px;border-radius:12px;cursor:pointer;
     transition:all .15s ease;box-shadow:0 1px 0 #0008
   }
-  .btn:hover, select:hover{border-color:var(--btn-br2);box-shadow:0 0 0 1px var(--btn-br2) inset}
+  .btn:hover{border-color:var(--btn-br2);box-shadow:0 0 0 1px var(--btn-br2) inset}
   .btn:active{transform:translateY(1px)}
   .btn[disabled]{opacity:.6;cursor:not-allowed;box-shadow:none}
+
+  /* Падащите менюта — бял фон, черен текст */
+  select{
+    appearance:none;background:#fff;color:#111;
+    border:1px solid var(--btn-br);padding:10px 14px;border-radius:12px;cursor:pointer;
+    transition:all .15s ease;box-shadow:0 1px 0 #0008
+  }
+  select:hover{border-color:var(--btn-br2);box-shadow:0 0 0 1px var(--btn-br2) inset}
+  option{color:#111;background:#fff}
+
   .grid{display:grid;gap:14px;margin:16px 0;grid-template-columns:repeat(3,1fr)}
   @media (max-width:900px){.grid{grid-template-columns:repeat(2,1fr)}}
   @media (max-width:560px){.grid{grid-template-columns:1fr}}
@@ -86,7 +96,7 @@ const TOPIC = "esp32/thermo/values";
 
 const fields = ["T1","T2","T3","T4","T5","T6"];
 let pkt = 0;
-let maxPoints = 120; // по подразбиране ~2 мин при 1Hz
+let windowSec = 120; // по подразбиране 2 мин
 let unit = "C";      // C|F|K
 
 // UI
@@ -103,9 +113,8 @@ const el = {
 const log = s => el.log.textContent = `[${new Date().toLocaleTimeString()}] ${s}\n` + el.log.textContent;
 const setStatus = s => el.status.textContent = s;
 
-// Картите + мини-графики
-// Съхраняваме САМО суровите данни в °C, конвертираме при показване/рисуване
-const seriesC = {}; // { T1:[..], ... }
+// Картите + мини-графики (пазим точки {t,vC} и режем по време)
+const series = {}; // { T1: [{t:ms, v:numberC}, ...], ... }
 (function(){
   const frag = document.createDocumentFragment();
   for (const name of fields){
@@ -117,7 +126,7 @@ const seriesC = {}; // { T1:[..], ... }
       <div class="muted" id="t-${name}">—</div>
       <canvas id="c-${name}" class="spark" width="360" height="56"></canvas>`;
     frag.appendChild(c);
-    seriesC[name] = [];
+    series[name] = [];
   }
   el.cards.appendChild(frag);
 })();
@@ -134,17 +143,26 @@ function unitSuffix(){
   return unit === 'C' ? '°C' : unit === 'F' ? '°F' : ' K';
 }
 
-function drawSpark(id, dataC){
+// рисуване на последните windowSec секунди
+function drawSpark(id, points){
   const cnv = document.getElementById(id);
   if (!cnv) return;
   const ctx = cnv.getContext('2d');
   const w = cnv.width, h = cnv.height;
   ctx.clearRect(0,0,w,h);
-  if (!dataC.length) return;
-  const data = dataC.map(convFromC).filter(x=>Number.isFinite(x));
+  if (!points.length) return;
+
+  const now = Date.now();
+  const from = now - windowSec*1000;
+  const windowPts = points.filter(p => p.t >= from);
+  if (!windowPts.length) return;
+
+  const data = windowPts.map(p => convFromC(p.v)).filter(x=>Number.isFinite(x));
   if (!data.length) return;
+
   const min = Math.min(...data), max = Math.max(...data), rng = (max-min)||1;
   const step = w / Math.max(1, data.length-1);
+
   ctx.lineWidth = 1.6;
   ctx.beginPath();
   data.forEach((v,i)=>{
@@ -155,25 +173,22 @@ function drawSpark(id, dataC){
   ctx.stroke();
 }
 
-// UI: промяна на единици или прозорец → прерисувай всичко
+// смяна на единици → обнови показаните стойности и графики
 el.unitSel.onchange = ()=>{
   unit = el.unitSel.value;
-  // обнови показаните стойности и графики
   for (const name of fields){
-    const arrC = seriesC[name];
-    const vC = arrC.length ? arrC[arrC.length-1] : null;
+    const arr = series[name];
+    const last = arr.length ? arr[arr.length-1].v : null;
     const vEl = document.getElementById('v-'+name);
-    if (vEl) vEl.textContent = vC==null ? '—' : `${convFromC(vC).toFixed(2)} ${unitSuffix()}`;
-    drawSpark('c-'+name, arrC);
+    if (vEl) vEl.textContent = last==null ? '—' : `${convFromC(last).toFixed(2)} ${unitSuffix()}`;
+    drawSpark('c-'+name, arr);
   }
 };
+// смяна на интервал → реално сменя времевия прозорец и прерисува
 el.winSel.onchange = ()=>{
-  maxPoints = parseInt(el.winSel.value, 10) || 120;
-  // отрежи към новия прозорец и прерисувай
+  windowSec = parseInt(el.winSel.value,10) || 120;
   for (const name of fields){
-    const arr = seriesC[name];
-    if (arr.length > maxPoints) seriesC[name] = arr.slice(-maxPoints);
-    drawSpark('c-'+name, seriesC[name]);
+    drawSpark('c-'+name, series[name]);
   }
 };
 
@@ -185,20 +200,24 @@ const options = { username: USER, password: PASS, reconnectPeriod: 2000, clean:t
 function onMsg(topic, payload){
   try{
     const d = JSON.parse(new TextDecoder().decode(payload));
-    const dt = d.datetime || new Date().toISOString(); // ИСТИНСКОТО ВРЕМЕ от ESP
+    const dt = d.datetime || new Date().toISOString();
+    const tms = Date.parse(dt) || Date.now();
 
     for (const name of fields){
-      const vC = Number(d[name]); // приемаме че идва в °C
-      const arr = seriesC[name];
+      const vC = Number(d[name]); // приемаме, че идва в °C
       if (Number.isFinite(vC)){
-        arr.push(vC);
-        if (arr.length > maxPoints) arr.shift();
+        const arr = series[name];
+        arr.push({t:tms, v:vC});
+        // чистим старите точки извън прозореца
+        const from = Date.now() - windowSec*1000;
+        while (arr.length && arr[0].t < from) arr.shift();
+        // UI
+        const vEl = document.getElementById('v-'+name);
+        const tEl = document.getElementById('t-'+name);
+        if (vEl) vEl.textContent = `${convFromC(vC).toFixed(2)} ${unitSuffix()}`;
+        if (tEl) tEl.textContent = dt;
+        drawSpark('c-'+name, arr);
       }
-      const vEl = document.getElementById('v-'+name);
-      const tEl = document.getElementById('t-'+name);
-      if (vEl) vEl.textContent = Number.isFinite(vC) ? `${convFromC(vC).toFixed(2)} ${unitSuffix()}` : '—';
-      if (tEl) tEl.textContent = dt;
-      drawSpark('c-'+name, arr);
     }
     el.pkts.textContent = String(++pkt);
   }catch(e){ log('Parse error: '+(e?.message||e)); }
