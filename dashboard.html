@@ -34,6 +34,25 @@
   select:hover{border-color:var(--btn-br2);box-shadow:0 0 0 1px var(--btn-br2) inset}
   option{color:#111;background:#fff}
 
+  .contact-info {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100px; /* adjust if needed */
+    background-color: #f5f5f5; /* optional */
+  }
+
+  .contact-info a {
+    color: #333;
+    text-decoration: none;
+    font-size: 1rem;
+    font-family: Arial, sans-serif;
+  }
+
+  .contact-info a:hover {
+    text-decoration: underline;
+  }
+  
   .grid{display:grid;gap:14px;margin:16px 0;grid-template-columns:repeat(3,1fr)}
   @media (max-width:900px){.grid{grid-template-columns:repeat(2,1fr)}}
   @media (max-width:560px){.grid{grid-template-columns:1fr}}
@@ -67,6 +86,9 @@
         </select>
       </label>
       <span class="pill"><a href="./log.html">Отиди на Лог</a></span>
+    </div>
+    <div class="contact-info">
+      <a href="mailto:someone@example.com">someone@example.com</a>
     </div>
   </div>
 </header>
